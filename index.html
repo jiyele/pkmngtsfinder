@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>GTS Tracker Web</title>
+<style>
+  body { background: #1e1e1e; color: white; font-family: sans-serif; padding: 20px; }
+  input { padding: 5px; width: 300px; margin-bottom: 10px; }
+  button { padding: 10px 20px; margin-left: 5px; cursor: pointer; }
+  #countdown { margin-top: 5px; font-style: italic; }
+  #output { margin-top: 20px; }
+  .pokemon-row { display: flex; justify-content: space-between; background: #2a2a2a; padding: 10px; margin-bottom: 5px; border-radius: 5px; align-items: center; }
+  .pokemon-col { display: flex; align-items: center; }
+  .pokemon-col img { width: 50px; height: 50px; margin-right: 10px; }
+  .arrow { font-size: 24px; margin: 0 10px; }
+</style>
+</head>
+<body>
+
+<h1>🔍 GTS Tracker Web</h1>
+
+<input id="keywords" placeholder="Mots-clés (ex: mew, umbreon)" value="mew, umbreon, blissey">
+<button id="scanBtn">Lancer le scan</button>
+<div id="countdown">Prochain scan dans : 10:00</div>
+
+<div id="output">Résultats ici...</div>
+
+<script>
+const scanBtn = document.getElementById("scanBtn");
+const output = document.getElementById("output");
+const countdownEl = document.getElementById("countdown");
+const keywordsInput = document.getElementById("keywords");
+
+let scanInterval = 10 * 60;
+let countdown = scanInterval;
+
+// Fonction de scan
+async function scanGTS() {
+  scanBtn.disabled = true;
+  scanBtn.textContent = "Scan en cours...";
+  output.innerHTML = "Chargement...";
+
+  try {
+    const keywords = keywordsInput.value.split(",").map(k => k.trim());
+    const res = await fetch("/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keywords })
+    });
+    if (!res.ok) throw new Error("Erreur HTTP " + res.status);
+    const data = await res.json();
+
+    console.log("Données reçues du serveur:", data);
+
+    output.innerHTML = "";
+    if (!data.results || data.results.length === 0) {
+      output.innerHTML = "Aucun Pokémon trouvé.";
+      return;
+    }
+
+    displayPokemon(data.results);
+    countdown = scanInterval;
+  } catch (err) {
+    console.error(err);
+    output.innerHTML = "❌ " + err.message;
+  } finally {
+    scanBtn.disabled = false;
+    scanBtn.textContent = "Lancer le scan";
+  }
+}
+
+function displayPokemon(pokemons) {
+  output.innerHTML = "";
+
+  pokemons.forEach(p => {
+    const row = document.createElement("div");
+    row.className = "pokemon-row";
+
+    // --- Colonne gauche (Wanted Pokémon) ---
+    const left = document.createElement("div");
+    left.className = "pokemon-col";
+    left.style.flexDirection = "column"; // <-- titre au-dessus du contenu
+
+    const titleLeft = document.createElement("div");
+    titleLeft.style.fontWeight = "bold";
+    titleLeft.style.marginBottom = "5px";
+    titleLeft.textContent = "Pokémon Wanted";
+    left.appendChild(titleLeft);
+
+    const leftContent = document.createElement("div");
+    leftContent.style.display = "flex";
+    leftContent.style.alignItems = "center";
+
+    if (p.wantedNum) {
+      const img1 = document.createElement("img");
+      img1.src = `/sprite/${p.wantedNum}`;
+      leftContent.appendChild(img1);
+    }
+
+    const infoLeft = document.createElement("div");
+    infoLeft.innerHTML = `<strong>${p.Wanted || "?"}</strong><br>
+      Nature: ${p.Nature || "-"}<br>
+      Objet: ${p["Held item"] || "-"}<br>
+      Talent: ${p.Ability || "-"}<br>
+      Dresseur: ${p["Offered by"] || "-"}`
+    leftContent.appendChild(infoLeft);
+
+    left.appendChild(leftContent);
+
+    // --- Colonne droite (User Pokémon) ---
+    const right = document.createElement("div");
+    right.className = "pokemon-col";
+    right.style.flexDirection = "column"; // titre au-dessus
+
+    const titleRight = document.createElement("div");
+    titleRight.style.fontWeight = "bold";
+    titleRight.style.marginBottom = "5px";
+    titleRight.textContent = "Pokémon You Want";
+    right.appendChild(titleRight);
+
+    const rightContent = document.createElement("div");
+    rightContent.style.display = "flex";
+    rightContent.style.alignItems = "center";
+
+    if (p.speciesNum) {
+      const img2 = document.createElement("img");
+      img2.src = `/sprite/${p.speciesNum}`;
+      rightContent.appendChild(img2);
+    }
+
+    const infoRight = document.createElement("div");
+    infoRight.innerHTML = `<strong>${p.Species || "?"}</strong><br>
+      Nature: ${p.Nature || "-"}<br>
+      Objet: ${p["Held item"] || "-"}<br>
+      Talent: ${p.Ability || "-"}<br>
+      Dresseur: ${p["Offered by"] || "-"}`
+    rightContent.appendChild(infoRight);
+
+    right.appendChild(rightContent);
+
+    // Flèche centrale
+    const arrow = document.createElement("div");
+    arrow.className = "arrow";
+    arrow.textContent = "➔";
+
+    row.appendChild(left);
+    row.appendChild(arrow);
+    row.appendChild(right);
+
+    output.appendChild(row);
+  });
+}
+
+scanBtn.addEventListener("click", scanGTS);
+
+setInterval(() => {
+  countdown--;
+  const minutes = Math.floor(countdown / 60).toString().padStart(2,"0");
+  const seconds = (countdown % 60).toString().padStart(2,"0");
+  countdownEl.textContent = `Prochain scan dans : ${minutes}:${seconds}`;
+
+  if (countdown <= 0) {
+    scanGTS();
+  }
+}, 1000);
+
+// Scan initial au chargement
+scanGTS();
+</script>
+
+</body>
+</html>
